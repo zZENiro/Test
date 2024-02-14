@@ -1,4 +1,5 @@
-﻿using Test.Core.Entities;
+﻿using System.Text;
+using Test.Core.Entities;
 using Test.DataAccess;
 using Test.DataAccess.MSServer;
 using Test.Domain.Models;
@@ -16,58 +17,86 @@ namespace Test.Domain.Services
         }
 
         /// <summary>
-        /// Get apartments filtered by rooms count.
+        /// Get apartments by filter.
         /// </summary>
-        /// <param name="roomsCount">Rooms count.</param>
+        /// <param name="filter">Apartments filter.</param>
         /// <returns></returns>
-        public async Task<IEnumerable<Apartment>> GetApartmentsByRoomsCount(int roomsCount)
+        public async Task<IEnumerable<ApartmentDto>> GetApartments(GetApartmentsFilter filter)
         {
             var dataAccess = _daFactory.CreateDataAccessProvider();
 
-            return await dataAccess.GetEntities<Apartment>(ApartmentsQueries.ApartmentsByRoomsCountQuery,
-                new Dictionary<string, object>()
+            var query = new StringBuilder(ApartmentsQueries.AllApartmentsQuery);
+            var queryArguments = new Dictionary<string, object>();
+
+            if (filter.RoomsCount != null)
+            {
+                query.Append(ApartmentsQueries.ColumnFilters.RoomsCountFilter);
+                queryArguments.Add("roomsCount", filter.RoomsCount);
+            }
+
+            var apartments = 
+                (await dataAccess.GetEntities<Apartment>(query.ToString(), queryArguments))
+                .Select(x => new ApartmentDto()
                 {
-                    { "roomsCount", roomsCount }
-                });
+                    Id = x.Id,
+                    RoomsCount = x.RoomsCount,
+                    Url = x.Url
+                }).ToList();
+
+            if (filter.WithCurrentPrice)
+            {
+                var apartmentsWithCurrentPrice = await GetApartmentsWithCurrentPrice(apartments.Select(x => x.Id).ToArray());
+
+                apartments = apartments.Join(apartmentsWithCurrentPrice, a => a.Id, awc => awc.Id,
+                    (c, awc) => new ApartmentDto()
+                    {
+                        Id = c.Id,
+                        RoomsCount = c.RoomsCount,
+                        Url = c.Url,
+                        CurrentPrice = awc.CurrentPrice,
+                        PriceUpdated = awc.Date
+                    }).ToList();
+            }
+
+            return apartments;
+        }
+
+        /// <summary>
+        /// Get month average apartments price.
+        /// </summary>
+        /// <returns></returns>
+        public async Task<IEnumerable<AverageApartmentsMonthPrice>> GetMonthAverageApartmentsPrice(GetApartmentsFilter filter)
+        {
+            var apartments = await GetApartments(filter);
+
+            var dataAccess = _daFactory.CreateDataAccessProvider();
+
+            return await dataAccess.GetEntities<AverageApartmentsMonthPrice>(ApartmentsQueries.AverageApartmentsPriceForMonthQuery, new Dictionary<string, object>()
+            {
+                {"apartmentsIds", apartments.Select(a => a.Id).ToArray()}
+            });
         }
 
         /// <summary>
         /// Get specified apartment with current price.
         /// </summary>
-        /// <param name="apartmentId">Apartment ID.</param>
+        /// <param name="apartmentsIds">Apartments IDs.</param>
         /// <returns></returns>
-        public async Task<ApartmentPriceHistory> GetApartmentWithCurrentPrice(long apartmentId)
+        private async Task<IEnumerable<ApartmentWithCurrentPrice>> GetApartmentsWithCurrentPrice(long[] apartmentsIds)
         {
             var dataAccess = _daFactory.CreateDataAccessProvider();
 
-            return (await dataAccess.GetEntities<ApartmentPriceHistory>(ApartmentsQueries.ApartmentWithCurrentPriceQuery,
-                new Dictionary<string, object>()
+            return (await dataAccess.GetEntities<ApartmentPriceHistory>(ApartmentsQueries.ApartmentsWithCurrentPriceQuery,
+                    new Dictionary<string, object>()
+                    {
+                        { "apartmentsIds", apartmentsIds }
+                    }))
+                .Select(x => new ApartmentWithCurrentPrice()
                 {
-                    { "apartmentId", apartmentId }
-                })).SingleOrDefault();
-        }
-
-        /// <summary>
-        /// Get all apartments.
-        /// </summary>
-        /// <returns></returns>
-        public async Task<IEnumerable<Apartment>> GetApartments()
-        {
-            var dataAccess = _daFactory.CreateDataAccessProvider();
-
-            return await dataAccess.GetEntities<Apartment>(ApartmentsQueries.AllApartmentsQuery);
-        }
-
-        public async Task<IEnumerable<AverageApartmentPrice>> GetMonthsAverageApartmentPrice(DateTime startDate, DateTime finishDate, long apartmentId)
-        {
-            var dataAccess = _daFactory.CreateDataAccessProvider();
-
-            return await dataAccess.GetEntities<AverageApartmentPrice>(ApartmentsQueries.AverageApartmentPriceForMonthQuery, new Dictionary<string, object>()
-            {
-                {"startDate", startDate},
-                {"finishDate", finishDate},
-                {"apartmentId", apartmentId}
-            });
+                    Id = x.ApartmentId,
+                    CurrentPrice = x.Price,
+                    Date = x.Date
+                }).ToList();
         }
     }
 }

@@ -5,18 +5,9 @@ namespace Test.Domain.Queries.Apartments
     public static class ApartmentsQueries
     {
         /// <summary>
-        /// Arguments: <c>roomsCount</c> of <see cref="int"/>
-        /// </summary>
-        public static string ApartmentsByRoomsCountQuery =>
-            $"""
-             SELECT * FROM {nameof(Apartment)} WHERE
-                {nameof(Apartment.RoomsCount)} = @roomsCount;
-             """;
-
-        /// <summary>
         /// Arguments: <c>apartmentId</c> of <see cref="int"/>.
         /// </summary>
-        public static string ApartmentWithCurrentPriceQuery =>
+        public static string ApartmentsWithCurrentPriceQuery =>
             $"""
              SELECT 
                 h.{nameof(ApartmentPriceHistory.ApartmentId)} 
@@ -31,7 +22,7 @@ namespace Test.Domain.Queries.Apartments
              INNER JOIN {nameof(ApartmentPriceHistory)} h 
                 ON t.ap_id = h.{nameof(ApartmentPriceHistory.ApartmentId)} AND 
                    t.date = h.{nameof(ApartmentPriceHistory.Date)}
-             WHERE h.{nameof(ApartmentPriceHistory.ApartmentId)} = @apartmentId;
+             WHERE h.{nameof(ApartmentPriceHistory.ApartmentId)} IN @apartmentsIds
              """;
 
         public static string AllApartmentsQuery =>
@@ -39,17 +30,24 @@ namespace Test.Domain.Queries.Apartments
              SELECT * FROM {nameof(Apartment)}
              """;
 
-        public static string AverageApartmentPriceForMonthQuery =>
+        public static string AverageApartmentsPriceForMonthQuery =>
             $"""
              SELECT
-                aph.{nameof(ApartmentPriceHistory.ApartmentId)}
-                ,DATEADD(MONTH, DATEDIFF(MONTH, 0, aph.{nameof(ApartmentPriceHistory.Date)}), 0) as Date
+                DATEADD(MONTH, DATEDIFF(MONTH, 0, aph.{nameof(ApartmentPriceHistory.Date)}), 0) as Date
                 ,AVG(aph.Price) Price
              FROM {nameof(ApartmentPriceHistory)} aph
-             WHERE aph.{nameof(ApartmentPriceHistory.Date)} >= @startDate AND 
-                    aph.{nameof(ApartmentPriceHistory.Date)} <= @finishDate AND
-                    aph.{nameof(ApartmentPriceHistory.ApartmentId)} = @apartmentId
-             GROUP BY aph.{nameof(ApartmentPriceHistory.ApartmentId)}, DATEADD(MONTH, DATEDIFF(MONTH, 0, aph.{nameof(ApartmentPriceHistory.Date)}), 0);
+             WHERE aph.{nameof(ApartmentPriceHistory.ApartmentId)} IN @apartmentsIds
+             GROUP BY DATEADD(MONTH, DATEDIFF(MONTH, 0, aph.{nameof(ApartmentPriceHistory.Date)}), 0)
              """;
+
+        public static class ColumnFilters
+        {
+            public static string RoomsCountFilter => ToWhereSqlStatement(
+                $"""
+                    WHERE {nameof(Apartment.RoomsCount)} = @roomsCount
+                """);
+
+            private static string ToWhereSqlStatement(string sql) => new string(sql.Prepend(' ').ToArray());
+        }
     }
 }

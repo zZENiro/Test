@@ -12,28 +12,26 @@ namespace Test.WebApi.Controllers
             _service = service;
         }
 
-        [HttpGet(nameof(GetApartmentWithCurrentPrice))]
-        public async Task<IActionResult> GetApartmentWithCurrentPrice(long apartmentId)
-        {
-            return Ok(await _service.GetApartmentWithCurrentPrice(apartmentId));
-        }
-
-        [HttpGet(nameof(GetApartmentsByRoomsCount))]
-        public async Task<IActionResult> GetApartmentsByRoomsCount(int roomsCount)
-        {
-            return Ok(await _service.GetApartmentsByRoomsCount(roomsCount));
-        }
-
         [HttpGet(nameof(GetApartments))]
-        public async Task<IActionResult> GetApartments()
+        public async Task<IActionResult> GetApartments(
+            [FromQuery] int? roomsCount = null,
+            [FromQuery] bool withCurrentPrice = false)
         {
-            return Ok(await _service.GetApartments());
+            return Ok(await _service.GetApartments(new GetApartmentsFilter()
+            {
+                RoomsCount = roomsCount,
+                WithCurrentPrice = withCurrentPrice
+            }));
         }
 
         [HttpGet(nameof(GetMonthsAverageApartmentPrice))]
-        public async Task<IActionResult> GetMonthsAverageApartmentPrice(DateTime startDate, DateTime finishDate, long apartmentId)
+        public async Task<IActionResult> GetMonthsAverageApartmentPrice(
+            [FromQuery] int? roomsCount = null)
         {
-            return Ok(await _service.GetMonthsAverageApartmentPrice(startDate, finishDate, apartmentId));
+            return Ok(await _service.GetMonthAverageApartmentsPrice(new GetApartmentsFilter()
+            {
+                RoomsCount = roomsCount
+            }));
         }
     }
 }
